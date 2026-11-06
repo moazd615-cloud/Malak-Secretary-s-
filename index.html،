@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Malak AI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#100e1b;color:white;font-family:Arial,sans-serif}
+.app{max-width:500px;margin:auto;min-height:100vh;padding:22px}
+header{text-align:center;padding:25px 0}
+.logo{width:105px;height:105px;border-radius:50%;margin:auto;
+background:linear-gradient(135deg,#e9a5d5,#8d70ed);
+display:grid;place-items:center;font-size:48px;
+box-shadow:0 0 35px #a77bea66}
+h1{margin:15px 0 5px;font-size:30px}
+.sub{color:#c5b4dc}
+.card{background:#211d30;border:1px solid #39304d;
+border-radius:20px;padding:18px;margin:15px 0}
+.status{color:#d9b5ff;text-align:center;margin:12px}
+button{border:0;border-radius:14px;padding:14px;
+font-size:16px;font-weight:bold;cursor:pointer}
+.main{width:100%;background:linear-gradient(90deg,#a879e9,#e28bc8);color:#160e24}
+.secondary{background:#39304d;color:white}
+.mic{width:85px;height:85px;border-radius:50%;font-size:32px;
+background:linear-gradient(135deg,#a879e9,#e28bc8);color:#180f24}
+.center{text-align:center;padding:12px}
+input{width:100%;padding:13px;border-radius:12px;
+border:1px solid #514466;background:#171323;color:white;font-size:16px}
+.chat{height:190px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.msg{padding:12px;border-radius:14px;max-width:90%;line-height:1.6}
+.me{background:#624b8b;align-self:flex-start}
+.her{background:#39304d;align-self:flex-end}
+small{color:#bdb0ce}
+.reminder{padding:10px;border-bottom:1px solid #443950}
+footer{text-align:center;color:#9b8cab;font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<div class="logo">🌸</div>
+<h1>ملك</h1>
+<div class="sub">Malak Personal Assistant</div>
+<div class="status" id="status">مستنياك تتكلم يا سيدي ❤️</div>
+</header>
+
+<div class="card center">
+<button class="mic" id="mic">🎙️</button>
+<p>اضغط واتكلم مع ملك</p>
+<small>جرب تقول: يا ملك فكّريني بالغدا الساعة 2</small>
+</div>
+
+<div class="card">
+<h3>💬 محادثتك مع ملك</h3>
+<div class="chat" id="chat">
+<div class="msg her">أهلاً بيك! أنا ملك 🌸 قولّي محتاج إيه؟</div>
+</div>
+</div>
+
+<div class="card">
+<h3>⏰ التذكيرات</h3>
+<div id="reminders"><small>لسه مفيش تذكيرات.</small></div>
+</div>
+
+<div class="card">
+<h3>🎤 تشغيل بالصوت</h3>
+<p>لما تفعّل الخاصية، ملك هتستجيب لاسمها أثناء فتح الصفحة.</p>
+<button class="main" id="wake">تفعيل الاستماع لاسم ملك</button>
+<p><small>الاستماع بكلمة التنبيه يحتاج بقاء الصفحة مفتوحة. التشغيل بالخلفية فوق التطبيقات يحتاج تطبيق Android وصلاحيات إضافية.</small></p>
+</div>
+
+<div class="card">
+<h3>✍️ اكتب لملك</h3>
+<input id="message" placeholder="اكتب رسالتك هنا...">
+<br><br>
+<button class="main" id="send">إرسال</button>
+</div>
+<footer>Malak AI • نسخة تجريبية أولى</footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let reminders=JSON.parse(localStorage.getItem("malak_reminders")||"[]");
+let recognition=null, wakeEnabled=false;
+
+function say(text){
+ if(!("speechSynthesis" in window))return;
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(text);
+ u.lang="ar-EG";u.rate=1.04;u.pitch=1.13;
+ const voices=speechSynthesis.getVoices();
+ const v=voices.find(x=>x.lang==="ar-EG")||voices.find(x=>x.lang.startsWith("ar"));
+ if(v)u.voice=v;
+ speechSynthesis.speak(u);
+}
+function addMsg(text,type){
+ const d=document.createElement("div");
+ d.className="msg "+type;d.textContent=text;
+ $("chat").appendChild(d);$("chat").scrollTop=$("chat").scrollHeight;
+}
+function save(){localStorage.setItem("malak_reminders",JSON.stringify(reminders));render();}
+function render(){
+ $("reminders").innerHTML="";
+ if(!reminders.length){$("reminders").innerHTML="<small>لسه مفيش تذكيرات.</small>";return;}
+ reminders.forEach((r,i)=>{
+ const d=document.createElement("div");d.className="reminder";
+ d.textContent="⏰ "+r.text+" — "+r.time;
+ $("reminders").appendChild(d);
+ });
+}
+function parseTime(text){
+ const m=text.match(/(?:الساعة|ساعه|على الساعة)?\s*(\d{1,2})(?:[:٫](\d{2}))?/);
+ if(!m)return null;
+ let h=Number(m[1]),min=Number(m[2]||0);
+ if(h>23||min>59)return null;
+ const now=new Date(), target=new Date();
+ target.setHours(h,min,0,0);
+ if(target<=now)target.setDate(target.getDate()+1);
+ return target;
+}
+function handle(text){
+ text=text.trim();
+ if(!text)return;
+ addMsg(text,"me");
+ $("status").textContent="ملك بتفكر في الرد...";
+ let reply="حاضر، سامعاك ❤️ احكيلي أكتر.";
+ const lower=text.toLowerCase();
+
+ if(/فكريني|ذكريني|اعملي تذكير|سجلّي تذكير/.test(text)){
+   const date=parseTime(text);
+   if(date){
+    const item={text:text.replace(/.*?(فكريني|ذكريني|اعملي تذكير|سجلّي تذكير)/,"").replace(/الساعة\s*\d{1,2}(:\d{2})?/,"").trim()||"التذكير",time:date.toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}),at:date.getTime(),done:false};
+    reminders.push(item);save();
+    reply="حاضر يا سيدي، سجلتلك التذكير ❤️ هفكرك في معاده لو الصفحة شغالة.";
+   }else reply="حاضر، بس قولي الساعة كام بالظبط؟";
+ }else if(/اسمك|انتي مين|انت مين/.test(text)){
+   reply="أنا ملك يا سيدي، مساعدتك اللي دمها خفيف شوية 😂";
+ }else if(/السلام عليكم|ازيك|إزيك/.test(text)){
+   reply="وعليكم السلام! إيه الأخبار؟ نورتني 🌸";
+ }else if(/شكرا|تسلمي/.test(text)){
+   reply="العفو يا سيدي، تحت أمرك 😂❤️";
+ }
+ addMsg(reply,"her");$("status").textContent="ملك معاك ❤️";say(reply);
+}
+function startMic(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){alert("المتصفح لا يدعم التعرف على الصوت. جرّب Chrome.");return;}
+ recognition=new SR();recognition.lang="ar-EG";
+ recognition.continuous=wakeEnabled;recognition.interimResults=false;
+ recognition.onresult=e=>{
+  const text=e.results[e.results.length-1][0].transcript;
+  if(wakeEnabled){
+   if(/يا ملك|ملك/.test(text)){
+    handle(text.replace(/يا ملك|ملك/,"").trim()||"أنا بناديكي يا ملك");
+   }
+  }else handle(text);
+ };
+ recognition.onerror=()=>{$("status").textContent="حصلت مشكلة في الميكروفون";}
+ recognition.onend=()=>{if(wakeEnabled){try{recognition.start()}catch(e){}}};
+ try{recognition.start();$("status").textContent="ملك بتسمعك 🎙️";}
+ catch(e){$("status").textContent="اسمح للمتصفح باستخدام الميكروفون";}
+}
+$("mic").onclick=()=>{wakeEnabled=false;if(recognition)recognition.stop();startMic();};
+$("wake").onclick=()=>{
+ wakeEnabled=!wakeEnabled;
+ $("wake").textContent=wakeEnabled?"إيقاف الاستماع لاسم ملك":"تفعيل الاستماع لاسم ملك";
+ if(wakeEnabled)startMic();else if(recognition)recognition.stop();
+};
+$("send").onclick=()=>{
+ const v=$("message").value.trim();if(!v)return;
+ $("message").value="";handle(v);
+};
+$("message").addEventListener("keydown",e=>{if(e.key==="Enter")$("send").click()});
+function checkReminders(){
+ const now=Date.now();
+ reminders.forEach(r=>{
+  if(!r.done&&r.at<=now){
+   r.done=true;
+   say("يا سيدي، معاد التذكير اللي طلبته ❤️");
+   if("Notification" in window&&Notification.permission==="granted")
+    new Notification("ملك بتفكرك ❤️",{body:r.text});
+  }
+ });
+ save();
+}
+if("Notification" in window&&Notification.permission==="default"){
+ Notification.requestPermission();
+}
+render();
+setInterval(checkReminders,15000);
+if("speechSynthesis" in window)speechSynthesis.onvoiceschanged=()=>{};
+</script>
+</body>
+</html>
